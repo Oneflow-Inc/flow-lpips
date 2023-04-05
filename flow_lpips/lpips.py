@@ -28,7 +28,7 @@ class LPIPS(nn.Module):
         use_dropout=True,
         model_path=None,
         eval_mode=True,
-        verbose=True,
+        verbose=False,
     ):
         """ Initializes a perceptual loss flow.nn.Module
 
@@ -94,6 +94,8 @@ class LPIPS(nn.Module):
         elif self.pnet_type == "squeeze":
             net_type = networks.squeezenet
             self.chns = [64, 128, 256, 384, 384, 512, 512]
+        else:
+            raise IndexError("Only support 'vgg', 'alex' and 'squeeze' for pretrained model.")
         self.L = len(self.chns)
 
         self.net = net_type(pretrained=not self.pnet_rand, requires_grad=self.pnet_tune)
@@ -127,13 +129,7 @@ class LPIPS(nn.Module):
                 if verbose:
                     print("Loading model from: %s" % model_path)
 
-                import torch
-
-                parameters = torch.load(model_path)
-                for key, value in parameters.items():
-                    val = value.detach().cpu().numpy()
-                    parameters[key] = val
-                self.load_state_dict(parameters, strict=False)
+                self.load_state_dict(flow.load(model_path), strict=False)
 
         if eval_mode:
             self.eval()
@@ -205,7 +201,6 @@ class ScalingLayer(nn.Module):
         )
 
     def forward(self, inp):
-        print(inp.shape, self.shift.shape, self.scale.shape)
         return (inp - self.shift) / self.scale
 
 
@@ -262,7 +257,6 @@ class BCERankingLoss(nn.Module):
     def __init__(self, chn_mid=32):
         super(BCERankingLoss, self).__init__()
         self.net = Dist2LogitLayer(chn_mid=chn_mid)
-        # self.parameters = list(self.net.parameters())
         self.loss = flow.nn.BCELoss()
 
     def forward(self, d0, d1, judge):
@@ -320,7 +314,7 @@ class DSSIM(FakeNet):
                 utils.tensor2np(utils.tensor2tensorlab(in1.data, to_norm=False)),
                 range=100.0,
             ).astype("float")
-        ret_var = Variable(flow.Tensor((value,)))
+        ret_var = flow.Tensor((value,))
         if self.use_gpu:
             ret_var = ret_var.cuda()
         return ret_var
